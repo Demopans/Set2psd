@@ -1,4 +1,4 @@
-from operation import run, files, batchSize
+from operation import run
 
 
 # Press the green button in the gutter to run the script.
