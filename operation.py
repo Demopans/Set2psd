@@ -1,22 +1,22 @@
-import asyncio, concurrent.futures as cfutures, os, PIL.Image
+import asyncio, concurrent.futures as cfutures, numpy as np, os, PIL.Image
 
 # GPU / CPU fallback
 try:
-    import cupy as np
-    if np.cuda.is_available():
+    import cupy as xp
+    if xp.cuda.is_available():
         print("🚀 CuPy GPU detected – using accelerated kernels")
         _USE_GPU = True
     else:
         raise ImportError("CuPy not available, only use_gpu=False will work")
 except (ModuleNotFoundError, ImportError) as e:
-    import numpy as np
+    import numpy as xp
     print(e)
     print('Failed to import CuPy. Falling back to CPU')
     _USE_GPU = False
 
 syspath = list[str]
 imgshape = tuple[int, int]
-imge = np.ndarray
+image = np.ndarray[tuple[int,int,int],xp.uint8] # explicit cross CPU GPU compat
 executor = cfutures.ThreadPoolExecutor(max_workers=os.cpu_count()//2) # prefer physical cores
 
 class Util:
@@ -43,14 +43,13 @@ class Util:
         return map(lambda p: ski.imread(p), paths), meta
 
     @staticmethod
-    def _writePNGs(img: imge, path: syspath, name: str) -> None:
+    def _writePNGs(img: image, path: syspath, name: str) -> None:
         import PIL.Image
-        im = img.get()
-        im = PIL.Image.fromarray(im)
+        im = PIL.Image.fromarray(img)
         im.save(f'{'/'.join(path, )}/_{name}.png', format='PNG', compress_level=9)  # compress as much as possible
 
     @staticmethod
-    async def writePNGs(img: imge, path: syspath, name: str):
+    async def writePNGs(img: image, path: syspath, name: str):
         # schedule
         future = executor.submit(Util._writePNGs, img, path, name)
         return future
@@ -58,27 +57,32 @@ class Util:
 
     # converts 3D to 2D, and back
     @staticmethod
-    def flatten(a: imge) -> imge:
-        return a.view(dtype=np.uint32).reshape(a.shape[:2])
+    def flatten(a: image) -> image:
+        return a.view(dtype=xp.uint32).reshape(a.shape[:2])
     @staticmethod
-    def fatten(a: imge, epahs) -> imge:
-        return a.view(dtype=np.uint8).reshape(epahs)
+    def fatten(a: image, epahs) -> image:
+        return a.view(dtype=xp.uint8).reshape(epahs)
 
+    @staticmethod
+    def batcher(ims: map, i: int, batchSize: int, ln: int, paths: list[str]) -> list[image]:
+        cache: list[image] = []
+        for _ in paths[i: min(i + batchSize, ln)]:
+            cache.append(Util.flatten(xp.asarray(next(ims))))
+        return cache
 
 class Compat: # also routes
 
     pass
 
-
 class GPUKernel:
     @staticmethod
-    def processImg(match: imge, im: imge, shape: tuple[int,int,int]) -> imge:
-        r = np.empty_like(im)
+    def processImg(match: image, im: image, shape: tuple[int,int,int]) -> image:
+        r = xp.empty_like(im)
         GPUKernel.transparentMask(match, im, r)
-        return Util.fatten(r,shape)
+        return Util.fatten(r,shape).get() # loads into system RAM
 
     # custom kernel
-    transparentMask = np.ElementwiseKernel(
+    transparentMask = xp.ElementwiseKernel(
         'uint32 x, uint32 y',
         'uint32 out',
         '''
@@ -86,45 +90,45 @@ class GPUKernel:
         ''',
         'transparentMask'
     )
-    @staticmethod
-    def batcher(ims: map, i: int, batchSize: int, ln: int, paths: list[str]) -> list[imge]:
-        cache: list[imge] = []
-        for _ in paths[i: min(i + batchSize, ln)]:
-            cache.append(Util.flatten(np.asarray(next(ims))))
-        return cache
 
     @staticmethod
-    def batchProcess():
-        pass
+    def runner(batchSize: int, ims, meta, paths: list[str]) -> list[int]:
+        ln = len(paths)
+        subRoots: list[int] = []  # 1st subroot is global root
+        i = 0
+        while i < ln:
+            img = next(ims)  # not be processed
+            subRoot = xp.asarray(img)
+            shape = subRoot.shape
+            subRoot = Util.flatten(subRoot)
+            subRoots.append(i)
+            i += 1
+            # gather batch, load into GPU mem
+            cache = Util.batcher(ims, i, batchSize, ln, paths)
+            # batch process, make async in the future
+            for s in cache:
+                r: image = GPUKernel.processImg(subRoot, s, shape)
+                asyncio.run(
+                    Util.writePNGs(r, meta[i][0], meta[i][1]))  # schedules file write into pool, main thread continues
+                i += 1
+        return subRoots
 
-    pass
+    @staticmethod # internal processor
+    def batchProcess(paths: list[str], batchSize: int):
+        ims, meta = Util.readPNGs(paths)
+        subRoots = GPUKernel.runner(batchSize, ims, meta, paths)
 
+        path = list(np.asarray(paths)[subRoots])
+
+        ims, meta = Util.readPNGs(path)
+        subRoots = GPUKernel.runner(batchSize, ims, meta, path)
+
+        ims, meta = Util.readPNGs(paths[0:1])
+        ins = next(ims)
+        asyncio.run(Util.writePNGs(ins, meta[0][0], meta[0][1]))
+        path
 
 def run(paths: list[str], batchSize: int):
-    # setup
-    ims, meta = Util.readPNGs(paths)
-    ln = len(paths)
-
-    subRoots: list[int] = [] # 1st subroot is global root
-    i = 0
-
-    while i < ln:
-        img = next(ims) # not be processed
-        subRoot = np.asarray(img)
-        shape = subRoot.shape
-        subRoot = Util.flatten(subRoot)
-        subRoots.append(i)
-        watch = meta[i][1] # debug var
-        i += 1
-        # gather batch, load into GPU mem
-        cache = GPUKernel.batcher(ims, i, batchSize, ln, paths)
-        # batch process
-        for s in cache:
-            r = GPUKernel.processImg(subRoot, s, shape)
-            asyncio.run(Util.writePNGs(r, meta[i][0], meta[i][1])) # schedules file write into pool, main thread continues
-            i += 1
-
-    cache
-    # link subroots together
+    pass
 
 
