@@ -128,6 +128,50 @@ class GPUKernel:
         asyncio.run(Util.writePNGs(ins, meta[0][0], meta[0][1]))
         path
 
+class CPUKernel:
+    @staticmethod
+    def processImg(match: image, im: image, shape: tuple[int, int, int]) -> image:
+        r = xp.empty_like(im)
+        GPUKernel.transparentMask(match, im, r)
+        return Util.fatten(r, shape).get()  # loads into system RAM
+
+    @staticmethod
+    def runner(batchSize: int, ims, meta, paths: list[str]) -> list[int]:
+        ln = len(paths)
+        subRoots: list[int] = []  # 1st subroot is global root
+        i = 0
+        while i < ln:
+            img = next(ims)  # not be processed
+            subRoot = xp.asarray(img)
+            shape = subRoot.shape
+            subRoot = Util.flatten(subRoot)
+            subRoots.append(i)
+            i += 1
+            # gather batch, load into GPU mem
+            cache = Util.batcher(ims, i, batchSize, ln, paths)
+            # batch process, make async in the future
+            for s in cache:
+                r: image = GPUKernel.processImg(subRoot, s, shape)
+                asyncio.run(
+                    Util.writePNGs(r, meta[i][0],
+                                   meta[i][1]))  # schedules file write into pool, main thread continues
+                i += 1
+        return subRoots
+
+    @staticmethod  # internal processor
+    def batchProcess(paths: list[str], batchSize: int):
+        ims, meta = Util.readPNGs(paths)
+        subRoots = GPUKernel.runner(batchSize, ims, meta, paths)
+
+        path = list(np.asarray(paths)[subRoots])
+
+        ims, meta = Util.readPNGs(path)
+        subRoots = GPUKernel.runner(batchSize, ims, meta, path)
+
+        ims, meta = Util.readPNGs(paths[0:1])
+        ins = next(ims)
+        asyncio.run(Util.writePNGs(ins, meta[0][0], meta[0][1]))
+
 def run(paths: list[str], batchSize: int):
     pass
 
