@@ -4,7 +4,7 @@
     <content url="file://$MODULE_DIR$">
       <excludeFolder url="file://$MODULE_DIR$/proc" />
     </content>
-    <orderEntry type="jdk" jdkName="3.13 WSL (Ubuntu-22.04): (/home/demo/.virtualenvs/Set2psd/bin/python)" jdkType="Python SDK" />
+    <orderEntry type="jdk" jdkName="Python 3.14 (Set2Psd)" jdkType="Python SDK" />
     <orderEntry type="sourceFolder" forTests="false" />
   </component>
 </module>

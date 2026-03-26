@@ -3,5 +3,5 @@
   <component name="Black">
     <option name="sdkName" value="Python 3.14 (Set2psd)" />
   </component>
-  <component name="ProjectRootManager" version="2" project-jdk-name="3.13 WSL (Ubuntu-22.04): (/home/demo/.virtualenvs/Set2psd/bin/python)" project-jdk-type="Python SDK" />
+  <component name="ProjectRootManager" version="2" project-jdk-name="Python 3.14 (Set2Psd)" project-jdk-type="Python SDK" />
 </project>

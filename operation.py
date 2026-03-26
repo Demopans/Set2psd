@@ -1,5 +1,7 @@
 import asyncio, concurrent.futures as cfutures, numpy as np, os, PIL.Image
 
+from numpy.f2py.auxfuncs import throw_error
+
 # GPU / CPU fallback
 try:
     import cupy as xp
@@ -43,18 +45,23 @@ class Util:
         return map(lambda p: ski.imread(p), paths), meta
 
     @staticmethod
-    def _writePNGs(img: image, path: syspath, name: str) -> None:
-        import PIL.Image
-        im = PIL.Image.fromarray(img)
-        im.save(f'{'/'.join(path, )}/_{name}.png', format='PNG', compress_level=9)  # compress as much as possible
-
-    @staticmethod
     async def writePNGs(img: image, path: syspath, name: str):
+        def _writePNGs(img: image, path: syspath, name: str) -> None:
+            import PIL.Image
+            im = PIL.Image.fromarray(img)
+            im.save(f'{'/'.join(path, )}/_{name}.png', format='PNG', compress_level=9)  # compress as much as possible
         # schedule
-        future = executor.submit(Util._writePNGs, img, path, name)
+        future = executor.submit(_writePNGs, img, path, name)
         return future
 
-
+    @staticmethod
+    async def writeTxt(data: list[list[int]], path: syspath):
+        def _writeTxt(data: list[list[int]], path: syspath) -> None:
+            with open(f'{'/'.join(path, )}/info.txt', 'w') as f:
+                for i in data:
+                    f.write(str(i).strip('[]') + '\n')
+        future = executor.submit(_writeTxt, data, path)
+        return future
     # converts 3D to 2D, and back
     @staticmethod
     def flatten(a: image) -> image:
@@ -70,6 +77,24 @@ class Util:
             cache.append(Util.flatten(xp.asarray(next(ims))))
         return cache
 
+    @staticmethod
+    def relayer(subRoots: list[int], ln: int, interval) -> list[list[int]]:
+        out: list[list[int]] = []
+
+        for i in range(ln):
+            app: list[int]
+            s = i % interval
+            match s:
+                case 0 if i == 0:
+                    app = [1]
+                case 0:
+                    app = [1, subRoots[i // interval] + 1]
+                case _ if subRoots[i // interval] == 0:
+                    app = [1, i + 1]
+                case _:
+                    app = [1, subRoots[i // interval] + 1, i + 1]
+            out.append(app)
+        return out
 class Compat: # also routes
 
     pass
@@ -92,7 +117,7 @@ class GPUKernel:
     )
 
     @staticmethod
-    def runner(batchSize: int, ims, meta, paths: list[str]) -> list[int]:
+    def runner(batchSize: int, ims, meta, paths: list[str], batchName) -> list[int]:
         ln = len(paths)
         subRoots: list[int] = []  # 1st subroot is global root
         i = 0
@@ -114,19 +139,25 @@ class GPUKernel:
         return subRoots
 
     @staticmethod # internal processor
-    def batchProcess(paths: list[str], batchSize: int):
+    def batchProcess(paths: list[str], batchSize: int, batchName: str='pack'):
+        #tree
         ims, meta = Util.readPNGs(paths)
-        subRoots = GPUKernel.runner(batchSize, ims, meta, paths)
+        subRoots = GPUKernel.runner(batchSize - 1, ims, meta, paths, '')
 
         path = list(np.asarray(paths)[subRoots])
 
+        #tree
         ims, meta = Util.readPNGs(path)
-        subRoots = GPUKernel.runner(batchSize, ims, meta, path)
+        GPUKernel.runner(batchSize - 1, ims, meta, path, '')
 
+        #root
         ims, meta = Util.readPNGs(paths[0:1])
         ins = next(ims)
         asyncio.run(Util.writePNGs(ins, meta[0][0], meta[0][1]))
-        path
+
+        # gather into reconstruction path
+        meta = Util.relayer(subRoots, len(paths), batchSize)
+        meta
 
 class CPUKernel:
     @staticmethod
@@ -161,12 +192,12 @@ class CPUKernel:
     @staticmethod  # internal processor
     def batchProcess(paths: list[str], batchSize: int):
         ims, meta = Util.readPNGs(paths)
-        subRoots = GPUKernel.runner(batchSize, ims, meta, paths)
+        subRoots = GPUKernel.runner(batchSize, ims, meta, paths, '')
 
         path = list(np.asarray(paths)[subRoots])
 
         ims, meta = Util.readPNGs(path)
-        subRoots = GPUKernel.runner(batchSize, ims, meta, path)
+        subRoots = GPUKernel.runner(batchSize, ims, meta, path, '')
 
         ims, meta = Util.readPNGs(paths[0:1])
         ins = next(ims)
