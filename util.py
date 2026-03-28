@@ -158,3 +158,4 @@ class Runner:
         Util.Compress.compress(root, files, 'Puffo', compress)
         # rm leftover files
         [os.remove(f'{root}/_{_}') for _ in files]
+        os.remove(f'{root}/info.txt')
