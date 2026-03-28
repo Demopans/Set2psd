@@ -1,10 +1,24 @@
-import cupy as cp
+import dpnp
+
+try:
+    import cupy as cp
+except (ModuleNotFoundError, ImportError) as e:
+    print(e)
+try:
+    import dpnp as dp
+except (ModuleNotFoundError, ImportError) as e:
+    print(e)
+
 import numpy as np
 
 compositeImage = np.ndarray[tuple[int,int], np.uint32]
 
 # kernels have consistent API
-class GPUKernel:
+class Kernel:
+    @staticmethod
+    def main(root: compositeImage, b: list[compositeImage]) -> list[compositeImage]: pass
+
+class GPUKernel(Kernel):
     # custom kernel
     transparentMask32 = cp.ElementwiseKernel(
         'uint32 x, uint32 y',
@@ -35,18 +49,16 @@ class GPUKernel:
     def main(root: compositeImage, b: list[compositeImage]) -> list[compositeImage]:
         return [GPUKernel.operate(root, _) for _ in b]
 
-class CPUKernel:
-    # numpy operator
-    transparentMask32 = lambda a,b: 0x0000_0000 if a==b else b
-    transparentMask64 = lambda a,b: 0x0000_0000_0000_0000 if a==b else b
-
+class CPUKernel(Kernel):
     @staticmethod
     def operate(a: compositeImage, b: compositeImage) -> compositeImage:
-        match a.dtype:
-            case np.uint32: opt = np.vectorize(CPUKernel.transparentMask32)
-            case np.uint64: opt = np.vectorize(CPUKernel.transparentMask64)
-        return opt(a, b)
+        return np.where(a == b, 0, b)
 
     @staticmethod
     def main(root: compositeImage, b: list[compositeImage]) -> list[compositeImage]:
         return [CPUKernel.operate(root, _) for _ in b]
+
+class IntelKernel(Kernel):
+    @staticmethod
+    def main(root: compositeImage, b: list[compositeImage]) -> list[compositeImage]:
+        return [dpnp.where(root == _, 0, _) for _ in b]
