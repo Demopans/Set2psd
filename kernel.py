@@ -1,5 +1,3 @@
-import dpnp
-
 try:
     import cupy as cp
 except (ModuleNotFoundError, ImportError) as e:
@@ -51,12 +49,8 @@ class GPUKernel(Kernel):
 
 class CPUKernel(Kernel):
     @staticmethod
-    def operate(a: compositeImage, b: compositeImage) -> compositeImage:
-        return np.where(a == b, 0, b)
-
-    @staticmethod
     def main(root: compositeImage, b: list[compositeImage]) -> list[compositeImage]:
-        return [CPUKernel.operate(root, _) for _ in b]
+        return [np.where(root == _, 0, _) for _ in b]
 
 class IntelKernel(Kernel):
     @staticmethod

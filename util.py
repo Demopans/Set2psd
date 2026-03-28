@@ -18,8 +18,7 @@ except (ModuleNotFoundError, ImportError) as e:
     _USE_GPU = False
     try:
         import dpctl
-        if len(dpctl.get_devices())==0:
-            raise ImportError("No Intel devices detected")
+        if len(dpctl.get_devices())==0: raise ImportError("No Intel devices detected")
         import dpnp as xp
     except (ModuleNotFoundError, ImportError) as e:
         print(e)
@@ -158,4 +157,4 @@ class Runner:
         Util.Compress.wipe(root, 'Puffo', compress)
         Util.Compress.compress(root, files, 'Puffo', compress)
         # rm leftover files
-        [os.remove(f'{root}/{_}') for _ in files]
+        [os.remove(f'{root}/_{_}') for _ in files]
