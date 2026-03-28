@@ -1,4 +1,4 @@
-from operation import run, GPUKernel
+from util import ROUTER
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':
     root= 'proc/4 PuffoTim/Puffo/'
@@ -125,5 +125,5 @@ if __name__ == '__main__':
         'Puffo_0120.png'
     ]
     batchSize = 30
-    GPUKernel.batchProcess(0, files, batchSize)
+
 # See PyCharm help at https://www.jetbrains.com/help/pycharm/
