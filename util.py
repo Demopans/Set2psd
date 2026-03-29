@@ -1,3 +1,26 @@
+"""
+util.py
+
+AUTO-GENERATED DOCUMENTATION (Grok-assisted)
+=============================================
+
+Core utility library for the differential PNG compressor.
+
+Key concepts:
+- Flattening: converts 3-channel/4-channel images (H×W×4 uint8) into a 2D packed
+  compositeImage (H×W uint32/uint64) so the kernel can operate on full ARGB pixels
+  in a single comparison.
+- Tree-based batching: builds a hierarchical dependency tree so each image only
+  stores deltas against its immediate ancestor(s). This dramatically reduces
+  redundancy across large sets of similar images (e.g. video frames, UI variants).
+- Async I/O via ThreadPoolExecutor + 7z packing for maximum speed and compression.
+
+The ROUTER global selects the fastest available kernel at import time:
+    1. CuPy GPU (if CUDA available)
+    2. Intel dpnp (if oneAPI devices present)
+    3. NumPy CPU fallback
+"""
+
 import concurrent.futures as cfutures, os, cv2, PIL.Image as PILI, numpy as np, py7zr
 
 from kernel import CPUKernel, GPUKernel, IntelKernel
@@ -35,7 +58,11 @@ executor = cfutures.ThreadPoolExecutor(max_workers=os.cpu_count() // 2)  # prefe
 
 
 class Util:
-    class IO: # contains generally blocking calls
+    """
+    Namespace for all static helper utilities.
+    """
+    class IO:
+        """I/O helpers – all heavy calls are wrapped in futures for async scheduling."""
         @staticmethod
         def getImageInfo(path: str) -> tuple[str | None, object, imgshape]:
             with PILI.open(path) as img:
@@ -70,8 +97,9 @@ class Util:
                 "F": 32, "I;16": 16, "I;16B": 16, "I;16L": 16, "I;16S": 16, "I;16BS": 16, "I;16LS": 16, "I;32": 32,
                 "I;32B": 32, "I;32L": 32, "I;32S": 32, "I;32BS": 32, "I;32LS": 32}
 
-
-    # converts 3D to 2D, and back
+    # ─────────────────────────────────────────────────────────────────────────
+    # Flatten / Fatten – convert between packed 2D compositeImage and 3D image
+    # ─────────────────────────────────────────────────────────────────────────
     flatten = lambda a, dtypes: a.view(dtype=bite[dtypes.itemsize * 4]).reshape(a.shape[:2])
     fatten = lambda a, dtypes: a.view(dtype=bite[dtypes.itemsize // 4]).reshape((a.shape[0],a.shape[1], 4))
 
@@ -103,13 +131,20 @@ class Util:
             'deflate': py7zr.FILTER_DEFLATE,
             'store': py7zr.FILTER_COPY
         }
-
+        ext = {
+            'lzma': '7z',
+            'lzma2': '7z',
+            'bzip': 'bz2',
+            'deflate': 'zip',
+            'store': 'zip'
+        }
         @staticmethod
         def wipe(root: str, name: str, method: str):
-            py7zr.SevenZipFile(f"{root}/{name}.7z", 'w', filters=[{"id": Util.Compress.method[method], "preset": 7}])
+            py7zr.SevenZipFile(f"{root}/{name}.{Util.Compress.ext[method]}", 'w', filters=[{"id": Util.Compress.method[method], "preset": 7}])
+
         @staticmethod
         def compress(root: str, files: list[str], name: str, method: str):
-            with py7zr.SevenZipFile(f"{root}/{name}.7z", 'a', filters=[{"id": Util.Compress.method[method] , "preset": 7}]) as archive:
+            with py7zr.SevenZipFile(f"{root}/{name}.{Util.Compress.ext[method]}", 'a', filters=[{"id": Util.Compress.method[method] , "preset": 7}]) as archive:
                 archive.write(f'{root}/info.txt', 'info.txt')
                 for file in files:
                     archive.write(f'{root}/_{file}', file)
@@ -127,7 +162,18 @@ class Runner:
         return [Util.fatten(_,_.dtype) for _ in br]
 
     @staticmethod
-    def main(root: str, files: list[str], batchSize: int, compress: str = 'lzma'):
+    def main(root: str, files: list[str], batchSize: int, name: str, compress: str = 'lzma2'):
+        """
+        Full compression workflow:
+
+        1. Validate all images are identical PNGs (size + bit depth)
+        2. Build dependency tree
+        3. Process internal batch members (deltas vs batch root)
+        4. Process batch roots themselves (deltas vs global root 0)
+        5. Write reconstruction metadata
+        6. 7z-pack everything
+        7. Clean up temporary _files
+        """
         import operator
         # verify
         if len(meta := set([Util.IO.getImageInfo(f'{root}/{_}') for _ in files])) != 1:
@@ -155,8 +201,8 @@ class Runner:
         [_.result() for _ in batches]
         b.result()
         # pack
-        Util.Compress.wipe(root, 'Puffo', compress)
-        Util.Compress.compress(root, files, 'Puffo', compress)
+        Util.Compress.wipe(root, name, compress)
+        Util.Compress.compress(root, files, name, compress)
         # rm leftover files
         [os.remove(f'{root}/_{_}') for _ in files]
         os.remove(f'{root}/info.txt')

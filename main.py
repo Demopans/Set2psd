@@ -2,39 +2,35 @@ from util import Runner
 # Press the green button in the gutter to run the script.
 
 if __name__ == '__main__':
-    root = 'proc/4 PuffoTim/PuffoT2'
+    root = 'proc/0'
     files = [
-        'PuffoTT01.png',
-        'PuffoTT02.png',
-        'PuffoTT03.png',
-        'PuffoTT04.png',
-        'PuffoTT05.png',
-        'PuffoTT06.png',
-        'PuffoTT07.png',
-        'PuffoTT08.png',
-        'PuffoTT09.png',
-        'PuffoTT10.png',
-        'PuffoTT11.png',
-        'PuffoTT12.png',
-        'PuffoTT13.png',
-        'PuffoTT14.png',
-        'PuffoTT15.png',
-        'PuffoTTB01.png',
-        'PuffoTTB02.png',
-        'PuffoTTB03.png',
-        'PuffoTTB04.png',
-        'PuffoTTB05.png',
-        'PuffoTTB06.png',
-        'PuffoTTB07.png',
-        'PuffoTTB08.png',
-        'PuffoTTB09.png',
-        'PuffoTTB10.png',
-        'PuffoTTB11.png',
-        'PuffoTTB12.png',
-        'PuffoTTB13.png',
-        'PuffoTTB14.png',
-        'PuffoTTB15.png'
+        '126073587_Lust Battery_0.png',
+        '126073587_Lust Battery_1.png',
+        '126073587_Lust Battery_2.png',
+        '126073587_Lust Battery_3.png',
+        '126073587_Lust Battery_4.png',
+        '126073587_Lust Battery_5.png',
+        '126073587_Lust Battery_6.png',
+        '126073587_Lust Battery_7.png',
+        '126073587_Lust Battery_8.png',
+        '126073587_Lust Battery_9.png',
+        '126073587_Lust Battery_10.png',
+        '126073587_Lust Battery_11.png',
+        '126073587_Lust Battery_12.png',
+        '126073587_Lust Battery_13.png',
+        '126073587_Lust Battery_14.png',
+        '126073587_Lust Battery_15.png',
+        '126073587_Lust Battery_16.png',
+        '126073587_Lust Battery_17.png',
+        '126073587_Lust Battery_18.png',
+        '126073587_Lust Battery_19.png',
+        '126073587_Lust Battery_20.png',
+        '126073587_Lust Battery_21.png',
+        '126073587_Lust Battery_22.png',
+        '126073587_Lust Battery_23.png',
+        '126073587_Lust Battery_24.png',
+        '126073587_Lust Battery_25.png'
     ]
     batchSize = 15
-    Runner.main(root, files, batchSize)
+    Runner.main(root, files, batchSize, 'Puffo')
 # See PyCharm help at https://www.jetbrains.com/help/pycharm/
