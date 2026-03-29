@@ -1,6 +1,6 @@
 import concurrent.futures as cfutures, os, cv2, PIL.Image as PILI, numpy as np, py7zr
 
-from kernel import CPUKernel, GPUKernel
+from kernel import CPUKernel, GPUKernel, IntelKernel
 
 ROUTER = CPUKernel
 try:
@@ -20,6 +20,7 @@ except (ModuleNotFoundError, ImportError) as e:
         import dpctl
         if len(dpctl.get_devices())==0: raise ImportError("No Intel devices detected")
         import dpnp as xp
+        ROUTER = IntelKernel
     except (ModuleNotFoundError, ImportError) as e:
         print(e)
         print('Failed to import Intel Data Parallel Extension for NumPy. Falling back to CPU')
@@ -159,3 +160,8 @@ class Runner:
         # rm leftover files
         [os.remove(f'{root}/_{_}') for _ in files]
         os.remove(f'{root}/info.txt')
+
+class CLI:
+    @staticmethod
+    def main():
+        pass
