@@ -22,6 +22,7 @@ The ROUTER global selects the fastest available kernel at import time:
 """
 
 import concurrent.futures as cfutures, os, cv2, PIL.Image as PILI, numpy as np, py7zr
+from math import ceil
 
 from kernel import CPUKernel, GPUKernel, IntelKernel
 
@@ -184,7 +185,7 @@ class Runner:
         # generate tree
         tree = Util.makeTree(files, batchSize)
         batches = [
-            tree[i * batchSize:min(len(files), i * batchSize + batchSize)] for i in range(len(files) // batchSize)
+            tree[i * batchSize:min(len(files), i * batchSize + batchSize)] for i in range(ceil(len(files) / batchSize))
         ]
         # feed GPU loop by batch
         for b in batches:
@@ -193,8 +194,11 @@ class Runner:
             # schedule write before next loop
             [Util.IO.writePNG(root,file,_) for file,_ in zip(f[1:],res)]
 
-        f = operator.itemgetter(*[_[0][-1] for _ in batches])(files)
-        res = Runner.runner(root, f)
+        # proc the subroots
+        if len(batches) > 1 :
+            f = operator.itemgetter(*[_[0][-1] for _ in batches])(files)
+            res = Runner.runner(root, f)
+
         batches, b = [Util.IO.writePNG(root, file, _) for file, _ in zip(f[1:], res)], Util.IO.writePNG(root,files[0],Util.IO.readPNG(root,files[0]).result())
         # write metadata
         Util.IO.writeMeta(root, files, tree).result()
